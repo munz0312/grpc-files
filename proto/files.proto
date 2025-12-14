@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package fileservice;
+
+service FileService {
+  rpc Upload(stream UploadChunk) returns (UploadResponse);
+  rpc Download(DownloadRequest) returns (stream DownloadChunk);
+  rpc DeleteFile(DeleteRequest) returns (DeleteResponse);
+  rpc ListFiles(ListRequest) returns (ListResponse);
+}
+
+message FileInfo {
+  string file_id = 1;
+  string filename = 2;
+  uint64 size = 3;
+  google.protobuf.Timestamp upload_time = 4;
+}
+
+message UploadChunk {
+  string upload_id = 1;
+  string filename = 2;
+  uint64 chunk_index = 3;
+  bytes data = 4;
+};
+
+message UploadResponse {
+  string file_id = 1;
+  string filename = 2;
+  uint64 size = 3;
+  google.protobuf.Timestamp upload_time = 4; 
+};
+
+message DownloadRequest {
+  string file_id = 1;
+}
+
+message DownloadChunk {
+  bytes data = 1;
+}
+
+message DeleteRequest {
+  string file_id = 1;
+};
+message DeleteResponse {};
+
+message ListRequest {};
+message ListResponse {
+  repeated FileInfo files = 1;
+};
+

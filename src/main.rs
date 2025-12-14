@@ -1,0 +1,99 @@
+use fileservice::file_service_server::FileService;
+use prost_types::Timestamp;
+use std::time::SystemTime;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Server;
+
+use crate::fileservice::{
+    DeleteRequest, DeleteResponse, DownloadChunk, DownloadRequest, ListRequest, ListResponse,
+    UploadChunk, UploadResponse, file_service_server::FileServiceServer,
+};
+
+pub mod fileservice {
+    tonic::include_proto!("fileservice");
+    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
+        tonic::include_file_descriptor_set!("fileservice_descriptor");
+}
+
+#[derive(Clone)]
+struct GRPCFileStore {
+    storage_path: String,
+}
+
+#[tonic::async_trait]
+impl FileService for GRPCFileStore {
+    async fn upload(
+        &self,
+        request: tonic::Request<tonic::Streaming<UploadChunk>>,
+    ) -> Result<tonic::Response<UploadResponse>, tonic::Status> {
+        let mut stream = request.into_inner();
+
+        let first_chunk = stream.message().await?.unwrap();
+        let filename = first_chunk.filename;
+        let upload_id = first_chunk.upload_id;
+
+        let temp_path = format!("{}/{}.tmp", self.storage_path, upload_id);
+        let mut file = tokio::fs::File::create(&temp_path)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("Failed to create file: {}", e)))?;
+
+        let mut total_size = first_chunk.data.len() as u64;
+
+        // write first chunk
+        tokio::io::AsyncWriteExt::write_all(&mut file, &first_chunk.data).await?;
+
+        // write the rest of the chunks
+        while let Some(chunk) = stream.message().await? {
+            total_size += chunk.data.len() as u64;
+            tokio::io::AsyncWriteExt::write_all(&mut file, &first_chunk.data).await?;
+        }
+
+        let final_path = format!("{}/{}", self.storage_path, filename);
+        tokio::fs::rename(&temp_path, &final_path).await?;
+
+        Ok(tonic::Response::new(UploadResponse {
+            file_id: upload_id,
+            filename,
+            size: total_size,
+            upload_time: Some(Timestamp::from(SystemTime::now())),
+        }))
+    }
+
+    type DownloadStream = ReceiverStream<Result<DownloadChunk, tonic::Status>>;
+
+    async fn download(
+        &self,
+        request: tonic::Request<DownloadRequest>,
+    ) -> Result<tonic::Response<Self::DownloadStream>, tonic::Status> {
+        todo!();
+    }
+    async fn delete_file(
+        &self,
+        request: tonic::Request<DeleteRequest>,
+    ) -> Result<tonic::Response<DeleteResponse>, tonic::Status> {
+        todo!();
+    }
+    async fn list_files(
+        &self,
+        request: tonic::Request<ListRequest>,
+    ) -> Result<tonic::Response<ListResponse>, tonic::Status> {
+        todo!();
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = "[::1]:50051".parse()?;
+    let service = GRPCFileStore {
+        storage_path: "./uploads".to_string(),
+    };
+    let reflection = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(fileservice::FILE_DESCRIPTOR_SET)
+        .build_v1()?;
+    Server::builder()
+        .add_service(FileServiceServer::new(service))
+        .add_service(reflection)
+        .serve(addr)
+        .await?;
+    Ok(())
+}
