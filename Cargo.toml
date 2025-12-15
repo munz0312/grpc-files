@@ -13,6 +13,7 @@ tonic-prost = "0.14.2"
 tonic-reflection = "0.14.2"
 uuid = { version = "1.19.0", features = ["v4"] }
 
+
 [build-dependencies]
 tonic-prost-build = "0.14.2"
 

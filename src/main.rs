@@ -1,4 +1,3 @@
-use fileservice::file_service_server::FileService;
 use prost_types::Timestamp;
 use std::time::SystemTime;
 use tokio_stream::wrappers::ReceiverStream;
@@ -6,7 +5,8 @@ use tonic::transport::Server;
 
 use crate::fileservice::{
     DeleteRequest, DeleteResponse, DownloadChunk, DownloadRequest, ListRequest, ListResponse,
-    UploadChunk, UploadResponse, file_service_server::FileServiceServer,
+    UploadChunk, UploadResponse,
+    file_service_server::{FileService, FileServiceServer},
 };
 
 pub mod fileservice {
@@ -27,7 +27,6 @@ impl FileService for GRPCFileStore {
         request: tonic::Request<tonic::Streaming<UploadChunk>>,
     ) -> Result<tonic::Response<UploadResponse>, tonic::Status> {
         let mut stream = request.into_inner();
-
         let first_chunk = stream.message().await?.unwrap();
         let filename = first_chunk.filename;
         let upload_id = first_chunk.upload_id;
@@ -63,19 +62,19 @@ impl FileService for GRPCFileStore {
 
     async fn download(
         &self,
-        request: tonic::Request<DownloadRequest>,
+        _request: tonic::Request<DownloadRequest>,
     ) -> Result<tonic::Response<Self::DownloadStream>, tonic::Status> {
         todo!();
     }
     async fn delete_file(
         &self,
-        request: tonic::Request<DeleteRequest>,
+        _request: tonic::Request<DeleteRequest>,
     ) -> Result<tonic::Response<DeleteResponse>, tonic::Status> {
         todo!();
     }
     async fn list_files(
         &self,
-        request: tonic::Request<ListRequest>,
+        _request: tonic::Request<ListRequest>,
     ) -> Result<tonic::Response<ListResponse>, tonic::Status> {
         todo!();
     }
