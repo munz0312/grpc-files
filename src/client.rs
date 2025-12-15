@@ -1,18 +1,17 @@
+use std::error::Error;
+
 use tokio::{fs::File, io::AsyncReadExt};
 
 use fileservice::file_service_client::FileServiceClient;
 use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Channel;
 
 use crate::fileservice::UploadChunk;
 pub mod fileservice {
     tonic::include_proto!("fileservice");
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let url = "http://[::1]:50051";
-    let mut client = FileServiceClient::connect(url).await?;
-
+async fn upload_file(client: &mut FileServiceClient<Channel>) -> Result<(), Box<dyn Error>> {
     let upload_id = uuid::Uuid::new_v4().to_string();
     let filename = "test_file.txt";
     let filepath = "test_file.txt";
@@ -58,5 +57,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             res_data.upload_time.unwrap().to_string()
         )
     );
+
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let url = "http://[::1]:50051";
+    let mut client = FileServiceClient::connect(url).await?;
+
+    upload_file(&mut client).await?;
+
     Ok(())
 }
