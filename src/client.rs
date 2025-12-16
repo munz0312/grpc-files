@@ -1,12 +1,15 @@
 use std::error::Error;
 
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncWriteExt},
+};
 
 use fileservice::file_service_client::FileServiceClient;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 
-use crate::fileservice::{DeleteRequest, ListRequest, UploadChunk};
+use crate::fileservice::{DeleteRequest, DownloadChunk, DownloadRequest, ListRequest, UploadChunk};
 pub mod fileservice {
     tonic::include_proto!("fileservice");
 }
@@ -43,6 +46,23 @@ async fn list_files(client: &mut FileServiceClient<Channel>) -> Result<(), Box<d
             date.to_string() + " " + time
         );
         println!("{}\n", file_info);
+    }
+    Ok(())
+}
+
+async fn download_file(
+    client: &mut FileServiceClient<Channel>,
+    file_name: String,
+) -> Result<(), Box<dyn Error>> {
+    let mut stream = client
+        .download(DownloadRequest {
+            file_name: file_name.clone(),
+        })
+        .await?
+        .into_inner();
+    let mut file = tokio::fs::File::create(file_name).await?;
+    while let Ok(Some(chunk)) = stream.message().await {
+        file.write(&chunk.data).await?;
     }
     Ok(())
 }
@@ -102,9 +122,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let url = "http://[::1]:50051";
     let mut client = FileServiceClient::connect(url).await?;
 
-    upload_file(&mut client).await?;
     list_files(&mut client).await?;
-    delete_file(&mut client, "test_file.txt".to_string()).await?;
-    list_files(&mut client).await?;
+    download_file(&mut client, "test_file.txt".to_string()).await?;
     Ok(())
 }

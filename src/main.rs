@@ -1,5 +1,6 @@
 use prost_types::Timestamp;
 use std::time::SystemTime;
+use tokio::{fs::File, io::AsyncReadExt};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 
@@ -69,9 +70,36 @@ impl FileService for GRPCFileStore {
 
     async fn download(
         &self,
-        _request: tonic::Request<DownloadRequest>,
+        request: tonic::Request<DownloadRequest>,
     ) -> Result<tonic::Response<Self::DownloadStream>, tonic::Status> {
-        todo!();
+        let filename = request.into_inner().file_name;
+        let full_path = self.storage_path.clone() + "/" + filename.as_str();
+
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
+
+        tokio::spawn(async move {
+            let mut file = File::open(full_path).await.unwrap();
+            let mut buffer = vec![0u8; 8192];
+            loop {
+                match file.read(&mut buffer[..]).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let chunk = DownloadChunk {
+                            data: buffer[..n].to_vec(),
+                        };
+
+                        if tx.send(Ok(chunk)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(_e) => break,
+                }
+            }
+        });
+
+        let res = ReceiverStream::new(rx);
+
+        Ok(tonic::Response::new(res))
     }
 
     async fn delete_file(
