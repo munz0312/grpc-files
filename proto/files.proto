@@ -12,10 +12,9 @@ service FileService {
 }
 
 message FileInfo {
-  string file_id = 1;
-  string filename = 2;
-  uint64 size = 3;
-  google.protobuf.Timestamp upload_time = 4;
+  string filename = 1;
+  uint64 size = 2;
+  google.protobuf.Timestamp upload_time = 3;
 }
 
 message UploadChunk {
@@ -33,7 +32,7 @@ message UploadResponse {
 };
 
 message DownloadRequest {
-  string file_id = 1;
+  string file_name = 1;
 }
 
 message DownloadChunk {
@@ -41,7 +40,7 @@ message DownloadChunk {
 }
 
 message DeleteRequest {
-  string file_id = 1;
+  string file_name = 1;
 };
 message DeleteResponse {};
 

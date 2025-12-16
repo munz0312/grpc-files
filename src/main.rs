@@ -4,8 +4,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 
 use crate::fileservice::{
-    DeleteRequest, DeleteResponse, DownloadChunk, DownloadRequest, ListRequest, ListResponse,
-    UploadChunk, UploadResponse,
+    DeleteRequest, DeleteResponse, DownloadChunk, DownloadRequest, FileInfo, ListRequest,
+    ListResponse, UploadChunk, UploadResponse,
     file_service_server::{FileService, FileServiceServer},
 };
 
@@ -18,6 +18,13 @@ pub mod fileservice {
 #[derive(Clone)]
 struct GRPCFileStore {
     storage_path: String,
+}
+
+impl GRPCFileStore {
+    pub fn new(storage_path: String) -> Result<Self, Box<dyn std::error::Error>> {
+        std::fs::create_dir_all(&storage_path)?;
+        Ok(GRPCFileStore { storage_path })
+    }
 }
 
 #[tonic::async_trait]
@@ -76,16 +83,31 @@ impl FileService for GRPCFileStore {
         &self,
         _request: tonic::Request<ListRequest>,
     ) -> Result<tonic::Response<ListResponse>, tonic::Status> {
-        todo!();
+        let mut files = tokio::fs::read_dir(&self.storage_path).await.unwrap();
+        let mut file_metadata: Vec<FileInfo> = Vec::new();
+
+        while let Ok(Some(entry)) = files.next_entry().await {
+            let filename = entry.file_name().into_string().unwrap();
+            let metadata = entry.metadata().await.unwrap();
+            let size = metadata.len();
+            let upload_time = Timestamp::from(metadata.created().unwrap());
+            file_metadata.push(FileInfo {
+                filename,
+                size,
+                upload_time: Some(upload_time),
+            });
+        }
+
+        Ok(tonic::Response::new(ListResponse {
+            files: file_metadata,
+        }))
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
-    let service = GRPCFileStore {
-        storage_path: "./uploads".to_string(),
-    };
+    let service = GRPCFileStore::new("./uploads".to_string()).unwrap();
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(fileservice::FILE_DESCRIPTOR_SET)
         .build_v1()?;

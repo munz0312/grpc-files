@@ -6,9 +6,32 @@ use fileservice::file_service_client::FileServiceClient;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 
-use crate::fileservice::UploadChunk;
+use crate::fileservice::{ListRequest, UploadChunk};
 pub mod fileservice {
     tonic::include_proto!("fileservice");
+}
+
+async fn list_files(client: &mut FileServiceClient<Channel>) -> Result<(), Box<dyn Error>> {
+    let files = client.list_files(ListRequest {}).await?;
+    let file_data = files.into_inner();
+    let file_vec = file_data.files;
+
+    println!("All files");
+    println!("Filename\tSize (Bytes)\tUpload Time");
+    for file in file_vec {
+        let upload_info = file.upload_time.unwrap().to_string();
+        let time_info: Vec<&str> = upload_info.split('T').collect();
+        let date = time_info[0];
+        let time = time_info[1].split('.').next().unwrap();
+        let file_info = format!(
+            "{}\t{}\t\t{}",
+            file.filename,
+            file.size,
+            date.to_string() + " " + time
+        );
+        println!("{}\n", file_info);
+    }
+    Ok(())
 }
 
 async fn upload_file(client: &mut FileServiceClient<Channel>) -> Result<(), Box<dyn Error>> {
@@ -67,6 +90,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut client = FileServiceClient::connect(url).await?;
 
     upload_file(&mut client).await?;
-
+    list_files(&mut client).await?;
     Ok(())
 }
