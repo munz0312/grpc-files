@@ -6,9 +6,22 @@ use fileservice::file_service_client::FileServiceClient;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 
-use crate::fileservice::{ListRequest, UploadChunk};
+use crate::fileservice::{DeleteRequest, ListRequest, UploadChunk};
 pub mod fileservice {
     tonic::include_proto!("fileservice");
+}
+
+async fn delete_file(
+    client: &mut FileServiceClient<Channel>,
+    file_name: String,
+) -> Result<(), Box<dyn Error>> {
+    client
+        .delete_file(DeleteRequest {
+            file_name: file_name.clone(),
+        })
+        .await?;
+    println!("Deleted file: {}", file_name);
+    Ok(())
 }
 
 async fn list_files(client: &mut FileServiceClient<Channel>) -> Result<(), Box<dyn Error>> {
@@ -90,6 +103,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut client = FileServiceClient::connect(url).await?;
 
     upload_file(&mut client).await?;
+    list_files(&mut client).await?;
+    delete_file(&mut client, "test_file.txt".to_string()).await?;
     list_files(&mut client).await?;
     Ok(())
 }
