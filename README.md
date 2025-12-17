@@ -26,11 +26,11 @@ You can try running the server on a different device, the server will be on port
 
 ## Features
 
--- List file info
--- Upload/download files
--- Delete files
+- List file info
+- Upload/download files
+- Delete files
 
 ## Todo
 
--- Configuration files to set server IP address, upload and download directories
--- Maybe a TUI?
+- Configuration files to set server IP address, upload and download directories
+- Maybe a TUI?
