@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, io::Write};
 
 use tokio::{
     fs::File,
@@ -122,7 +122,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let url = "http://[::1]:50051";
     let mut client = FileServiceClient::connect(url).await?;
 
-    list_files(&mut client).await?;
-    download_file(&mut client, "test_file.txt".to_string()).await?;
-    Ok(())
+    loop {
+        print!("Enter your option: ");
+        std::io::stdout().flush().unwrap();
+        let mut input = String::new();
+        std::io::stdin()
+            .read_line(&mut input)
+            .expect("Error reading option");
+        let choice = input.trim().parse::<u8>()?;
+
+        match choice {
+            1 => list_files(&mut client).await?,
+            2 => upload_file(&mut client).await?,
+            3 => {
+                println!("Enter the file to download");
+                let mut file_name = String::new();
+                std::io::stdin().read_line(&mut file_name)?;
+                download_file(&mut client, file_name).await?;
+            }
+            4 => {
+                println!("Enter the file to upload");
+                let mut file_name = String::new();
+                std::io::stdin().read_line(&mut file_name)?;
+                delete_file(&mut client, file_name).await?;
+            }
+            _ => eprintln!("Invalid choice: {}", choice),
+        }
+    }
 }
