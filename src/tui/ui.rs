@@ -1,6 +1,6 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect, Alignment},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     prelude::Stylize,
     style::{Color, Style},
     text::{Line, Span},
@@ -37,7 +37,10 @@ pub fn ui(frame: &mut Frame, app: &App) {
         let area = centered_rect(60, 20, frame.area());
         let text = vec![
             Line::from(""),
-            Line::from(Span::styled("Selecting File for Upload", Style::default().fg(Color::Yellow).bold())),
+            Line::from(Span::styled(
+                "Selecting File for Upload",
+                Style::default().fg(Color::Yellow).bold(),
+            )),
             Line::from(""),
             Line::from("The file selection dialog will open in a separate window."),
             Line::from(""),
@@ -116,12 +119,12 @@ pub fn ui(frame: &mut Frame, app: &App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("File Server Browser"),
+                .title(" File Server Browser ")
+                .title_bottom(" r: refresh | d: download | X: delete | U: upload | q: quit "),
         )
         .highlight_style(Style::default());
 
     frame.render_widget(list, chunks[0]);
-
     // Status bar
     let status_text = if let Some(msg) = app.status_message() {
         msg.clone()
@@ -129,7 +132,7 @@ pub fn ui(frame: &mut Frame, app: &App) {
         "No files. Press r to refresh".to_string()
     } else {
         format!(
-            "Selected: {} | r: refresh | d: download | X: delete | U: upload | q: quit",
+            "Selected: {}",
             app.files()
                 .get(app.selected_index())
                 .map(|f| &f.filename)

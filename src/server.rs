@@ -4,17 +4,11 @@ use tokio::{fs::File, io::AsyncReadExt};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 
-use crate::fileservice::{
+use grpc_files::fileservice::{
     DeleteRequest, DeleteResponse, DownloadChunk, DownloadRequest, FileInfo, ListRequest,
     ListResponse, UploadChunk, UploadResponse,
     file_service_server::{FileService, FileServiceServer},
 };
-
-pub mod fileservice {
-    tonic::include_proto!("fileservice");
-    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
-        tonic::include_file_descriptor_set!("fileservice_descriptor");
-}
 
 #[derive(Clone)]
 struct GRPCFileStore {
@@ -145,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
     let service = GRPCFileStore::new("./uploads".to_string()).unwrap();
     let reflection = tonic_reflection::server::Builder::configure()
-        .register_encoded_file_descriptor_set(fileservice::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(grpc_files::fileservice::FILE_DESCRIPTOR_SET)
         .build_v1()?;
     Server::builder()
         .add_service(FileServiceServer::new(service))

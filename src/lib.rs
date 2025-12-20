@@ -1,6 +1,6 @@
 pub mod fileservice {
     tonic::include_proto!("fileservice");
-    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
+    pub const FILE_DESCRIPTOR_SET: &[u8] =
         tonic::include_file_descriptor_set!("fileservice_descriptor");
 }
 pub mod tui;
