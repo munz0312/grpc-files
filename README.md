@@ -1,6 +1,6 @@
 # gRPC-files
 
-A file server implementation using gRPC for client-server communication
+A file server implementation using gRPC for client-server communication. Also features a simple TUI for the client using ratatui.
 
 ## Usage
 
@@ -16,10 +16,10 @@ Run the server:
 cargo run --bin server
 ```
 
-Run the client CLI in another terminal:
+Run the TUI client in another terminal:
 
 ```bash
-cargo run --bin client
+cargo run --bin tui-client
 ```
 
 You can try running the server on a different device, the server will be on port 50051
@@ -33,4 +33,3 @@ You can try running the server on a different device, the server will be on port
 ## Todo
 
 - Configuration files to set server IP address, upload and download directories
-- Maybe a TUI?
