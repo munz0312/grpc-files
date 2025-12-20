@@ -52,7 +52,7 @@ impl FileService for GRPCFileStore {
         // write the rest of the chunks
         while let Some(chunk) = stream.message().await? {
             total_size += chunk.data.len() as u64;
-            tokio::io::AsyncWriteExt::write_all(&mut file, &first_chunk.data).await?;
+            tokio::io::AsyncWriteExt::write_all(&mut file, &chunk.data).await?;
         }
 
         let final_path = format!("{}/{}", self.storage_path, filename);

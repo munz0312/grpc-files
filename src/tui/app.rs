@@ -1,9 +1,17 @@
 use crate::fileservice::FileInfo;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AppMode {
+    Normal,
+    Uploading,
+}
+
 pub struct App {
     files: Vec<FileInfo>,
     selected_index: usize,
     status_message: Option<String>,
+    mode: AppMode,
+    selected_file_path: Option<String>,
 }
 
 impl App {
@@ -12,6 +20,8 @@ impl App {
             files: Vec::new(),
             selected_index: 0,
             status_message: Some("Press r to refresh".to_string()),
+            mode: AppMode::Normal,
+            selected_file_path: None,
         }
     }
 
@@ -43,5 +53,45 @@ impl App {
 
     pub fn clear_status(&mut self) {
         self.status_message = None;
+    }
+
+    pub fn files(&self) -> &Vec<FileInfo> {
+        &self.files
+    }
+
+    pub fn selected_index(&self) -> usize {
+        self.selected_index
+    }
+
+    pub fn status_message(&self) -> &Option<String> {
+        &self.status_message
+    }
+
+    pub fn selected_file(&self) -> Option<&FileInfo> {
+        self.files.get(self.selected_index)
+    }
+
+    pub fn set_file_for_upload(&mut self, path: String) {
+        self.selected_file_path = Some(path);
+    }
+
+    pub fn clear_file_path(&mut self) {
+        self.selected_file_path = None;
+    }
+
+    pub fn selected_file_path(&self) -> &Option<String> {
+        &self.selected_file_path
+    }
+
+    pub fn mode(&self) -> &AppMode {
+        &self.mode
+    }
+
+    pub fn set_mode(&mut self, mode: AppMode) {
+        self.mode = mode;
+    }
+
+    pub fn is_uploading(&self) -> bool {
+        matches!(self.mode, AppMode::Uploading)
     }
 }
