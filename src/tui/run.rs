@@ -18,7 +18,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Channel;
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 use uuid;
 
 use crate::{
@@ -38,8 +38,24 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut app = App::new();
-    let url = "http://[::1]:50051";
-    let mut client = FileServiceClient::connect(url).await?;
+    let client_cert = tokio::fs::read_to_string("./auth/client-cert.pem").await?;
+    let client_key = tokio::fs::read_to_string("./auth/client-key.pem").await?;
+    let client_identity = Identity::from_pem(client_cert, client_key);
+
+    let server_ca_cert = tokio::fs::read_to_string("./auth/ca-cert.pem").await?;
+    let server_ca_cert = Certificate::from_pem(server_ca_cert);
+
+    let tls = ClientTlsConfig::new()
+        .domain_name("localhost")
+        .ca_certificate(server_ca_cert)
+        .identity(client_identity);
+
+    let channel = Channel::from_static("https://localhost:50051")
+        .tls_config(tls)?
+        .connect()
+        .await?;
+
+    let mut client = FileServiceClient::new(channel);
     let res = run_app(&mut terminal, &mut app, &mut client).await;
 
     disable_raw_mode()?;

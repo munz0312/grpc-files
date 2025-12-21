@@ -2,7 +2,10 @@ use prost_types::Timestamp;
 use std::time::SystemTime;
 use tokio::{fs::File, io::AsyncReadExt};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Server;
+use tonic::{
+    server,
+    transport::{Certificate, Identity, Server, ServerTlsConfig},
+};
 
 use grpc_files::fileservice::{
     DeleteRequest, DeleteResponse, DownloadChunk, DownloadRequest, FileInfo, ListRequest,
@@ -136,15 +139,29 @@ impl FileService for GRPCFileStore {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cert = tokio::fs::read_to_string("./auth/server-cert.pem").await?;
+    let key = tokio::fs::read_to_string("./auth/server-key.pem").await?;
+    let server_identity = Identity::from_pem(cert, key);
+
+    let client_ca_cert = tokio::fs::read_to_string("./auth/ca-cert.pem").await?;
+    let client_ca_cert = Certificate::from_pem(client_ca_cert);
+
+    let tls = ServerTlsConfig::new()
+        .identity(server_identity)
+        .client_ca_root(client_ca_cert);
+
     let addr = "[::1]:50051".parse()?;
     let service = GRPCFileStore::new("./uploads".to_string()).unwrap();
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(grpc_files::fileservice::FILE_DESCRIPTOR_SET)
         .build_v1()?;
+
     Server::builder()
+        .tls_config(tls)?
         .add_service(FileServiceServer::new(service))
         .add_service(reflection)
         .serve(addr)
         .await?;
+
     Ok(())
 }
