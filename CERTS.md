@@ -88,7 +88,7 @@ Step CA is now running on `https://<SERVER_IP>:9000`
 
 ### Export CA Root Certificate (Server)
 
-This certificate is needed by all clients to trust your CA. It will be used to by them to generate client certs It will be used to by them to generate client certs.
+This certificate is needed by all clients to trust your CA. It will be used to by them to generate client certs.
 
 Refer to CONFIG.md to see where to place the `auth/` directory.
 
