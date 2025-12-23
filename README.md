@@ -10,6 +10,8 @@ A file server implementation using gRPC for client-server communication. Also fe
 
 [protoc](https://protobuf.dev/installation/) (Protocol Buffer Compiler)
 
+Refer to CONFIG.md, then CERTS.md to set up configuration files and certifates for TLS authentication.
+
 Run the server:
 
 ```bash
@@ -32,4 +34,3 @@ You can try running the server on a different device, the server will be on port
 
 ## Todo
 
-- Configuration files to set server IP address, upload and download directories
