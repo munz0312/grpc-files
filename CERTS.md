@@ -2,21 +2,6 @@
 
 A guide to generating the certificates needed for TLS auth in this project
 
----
-
-## Table of Contents
-
-1. [Prerequisites](#prerequisites)
-2. [Installation](#installation)
-3. [CA Initialization](#ca-initialization)
-4. [Configuration](#configuration)
-5. [Certificate Generation](#certificate-generation)
-6. [Client Setup](#client-setup)
-7. [Certificate Renewal](#certificate-renewal)
-8. [Troubleshooting](#troubleshooting)
-
----
-
 ## Prerequisites
 
 - Two machines on the same network (server and client)
@@ -28,18 +13,18 @@ A guide to generating the certificates needed for TLS auth in this project
 
 ### Server Machine
 
-**Download and install Step CA server and CLI tools:**
+**Download and install Step CA server and CLI tools**
 
 https://smallstep.com/docs/step-ca/installation/
 
 
 ### Client Machine
 
-**Install only Step CLI tools (not the CA server):**
+**Install only Step CLI tools (not the CA server)**
 
 ---
 
-## CA Initialization
+## CA Initialisation
 
 ### Initialise Certificate Authority (Server)
 
@@ -120,7 +105,7 @@ step ca root > auth/ca-cert.pem
 ### Generate Server Certificate (Server)
 
 ```bash
-cd ~/your-project-directory
+cd ~/.file_server
 
 # Generate server certificate with IP address
 step ca certificate <SERVER_IP> auth/server-cert.pem auth/server-key.pem \
@@ -159,23 +144,23 @@ step ca certificate 192.168.1.149 auth/server-cert.pem auth/server-key.pem \
 
 On server:
 ```bash
-cd ~/your-project-directory/auth
+cd ~/.file_server/auth
 python3 -m http.server 8000
 ```
 
 On client:
 ```bash
-cd ~/your-project-directory
+cd ~/.file_server
 mkdir -p auth
 wget http://<SERVER_IP>:8000/ca-cert.pem -O auth/ca-cert.pem
 ```
 
-You can also just use a USB drive or SSH to transfer the ca-cert.pem file.
+You can also just use a USB drive or SSH to distribute the ca-cert.pem file.
 
 ### Generate Client Certificate (Client)
 
 ```bash
-cd ~/your-project-directory
+cd ~/.file_server
 
 # Generate client certificate
 step ca certificate client-<NAME> auth/client-cert.pem auth/client-key.pem \
@@ -234,5 +219,5 @@ step ca renew auth/client-cert.pem auth/client-key.pem \
 
 ### Common Issues
 
-You'll need to make sure your server machine will actually allow traffic from TCP via the ports being used (eg 50051 for gRPC, 9000 for the CA server).
+You'll need to make sure your server machine will actually allow traffic from TCP via the ports being used (eg 50051 for gRPC, 9000 for the CA server) so set up rules in whatever way is appropriate for your OS.
 
