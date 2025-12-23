@@ -50,7 +50,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .ca_certificate(server_ca_cert)
         .identity(client_identity);
 
-    let channel = Channel::from_static("https://localhost:50051")
+    let channel = Channel::from_static("https://192.168.1.244:50051")
         .tls_config(tls)?
         .connect()
         .await?;

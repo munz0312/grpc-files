@@ -22,6 +22,7 @@ subjectAltName = @alt_names
 DNS.1 = localhost
 IP.1 = 127.0.0.1
 IP.2 = ::1
+IP.3 = 192.168.1.244
 EOF
 
 openssl genrsa -out auth/server-key.pem 4096
@@ -32,7 +33,8 @@ openssl req -new -key auth/server-key.pem -out auth/server-csr.pem \
 openssl x509 -req -in auth/server-csr.pem \
   -CA auth/ca-cert.pem -CAkey auth/ca-key.pem \
   -CAcreateserial -out auth/server-cert.pem \
-  -days 365 -sha256 -extfile auth/v3.ext
+  -days 365 -sha256 -extfile auth/v3.ext \
+  -set_serial 01
 
 # Create Client Certificate  
 echo "Creating client certificate..."
@@ -41,7 +43,8 @@ openssl req -new -key auth/client-key.pem -out auth/client-csr.pem \
   -subj "/C=US/ST=State/L=City/O=MyOrg/CN=client-alice"
 openssl x509 -req -days 365 -in auth/client-csr.pem \
   -CA auth/ca-cert.pem -CAkey auth/ca-key.pem \
-  -CAcreateserial -out auth/client-cert.pem -sha256
+  -CAcreateserial -out auth/client-cert.pem -sha256 \
+  -set_serial 02
 
 # Cleanup
 rm -f auth/*.csr auth/v3.ext

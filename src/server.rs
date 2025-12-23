@@ -76,7 +76,7 @@ impl FileService for GRPCFileStore {
 
         tokio::spawn(async move {
             let mut file = File::open(full_path).await.unwrap();
-            let mut buffer = vec![0u8; 8192];
+            let mut buffer = vec![0u8; 10 * 1024 * 1024];
             loop {
                 match file.read(&mut buffer[..]).await {
                     Ok(0) => break,
@@ -150,7 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .identity(server_identity)
         .client_ca_root(client_ca_cert);
 
-    let addr = "[::1]:50051".parse()?;
+    let addr = "0.0.0.0:50051".parse()?;
     let service = GRPCFileStore::new("./uploads".to_string()).unwrap();
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(grpc_files::fileservice::FILE_DESCRIPTOR_SET)
@@ -158,6 +158,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Server::builder()
         .tls_config(tls)?
+        .initial_connection_window_size(1024 * 1024)
+        .initial_stream_window_size(1024 * 1024)
         .add_service(FileServiceServer::new(service))
         .add_service(reflection)
         .serve(addr)
