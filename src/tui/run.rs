@@ -22,6 +22,7 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 use uuid;
 
 use crate::{
+    config::Config,
     fileservice::{
         DeleteRequest, DownloadRequest, ListRequest, UploadChunk,
         file_service_client::FileServiceClient,
@@ -32,6 +33,9 @@ use crate::{
     },
 };
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let config = crate::config::Config::load()?;
+    let auth_dir = crate::config::Config::get_auth_dir()?;
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -39,13 +43,13 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
     let mut app = App::new();
     let client_cert =
-        tokio::fs::read_to_string("/home/munzir/stuff/grpc-files/auth/client-cert.pem").await?;
+        tokio::fs::read_to_string(auth_dir.join("client-cert.pem")).await?;
     let client_key =
-        tokio::fs::read_to_string("/home/munzir/stuff/grpc-files/auth/client-key.pem").await?;
+        tokio::fs::read_to_string(auth_dir.join("client-key.pem")).await?;
     let client_identity = Identity::from_pem(client_cert, client_key);
 
     let server_ca_cert =
-        tokio::fs::read_to_string("/home/munzir/stuff/grpc-files/auth/ca-cert.pem").await?;
+        tokio::fs::read_to_string(auth_dir.join("ca-cert.pem")).await?;
     let server_ca_cert = Certificate::from_pem(server_ca_cert);
 
     let tls = ClientTlsConfig::new()
@@ -53,7 +57,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .ca_certificate(server_ca_cert)
         .identity(client_identity);
 
-    let channel = Channel::from_static("https://192.168.1.149:50051")
+    let server_url = format!("https://{}", config.server_connect_address);
+    let channel = Channel::from_shared(server_url)?
         .tls_config(tls)?
         .initial_connection_window_size(1024 * 1024)
         .initial_stream_window_size(1024 * 1024)
@@ -61,7 +66,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let mut client = FileServiceClient::new(channel);
-    let res = run_app(&mut terminal, &mut app, &mut client).await;
+    let res = run_app(&mut terminal, &mut app, &mut client, &config).await;
 
     disable_raw_mode()?;
     execute!(
@@ -78,6 +83,7 @@ async fn run_app<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,
     client: &mut FileServiceClient<Channel>,
+    config: &Config,
 ) -> io::Result<()> {
     // Initial refresh
     if let Err(e) = refresh_files(app, client).await {
@@ -121,7 +127,7 @@ async fn run_app<B: Backend>(
                         let filename = file.filename.clone();
                         app.set_status(format!("Downloading {}...", filename));
                         //terminal.draw(|f| ui(f, app))?;
-                        if let Err(e) = download_file(client, &filename).await {
+                        if let Err(e) = download_file(client, &filename, config).await {
                             app.set_status(format!("Error downloading {}: {}", filename, e));
                         } else {
                             app.set_status(format!("Downloaded {}", filename));
@@ -194,6 +200,7 @@ async fn delete_file(
 async fn download_file(
     client: &mut FileServiceClient<Channel>,
     filename: &str,
+    config: &Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut stream = client
         .download(DownloadRequest {
@@ -202,7 +209,7 @@ async fn download_file(
         .await?
         .into_inner();
 
-    let full_path = format!("/home/munzir/stuff/grpc-files/downloads/{}", filename);
+    let full_path = format!("{}/{}", config.download_directory, filename);
     let path = Path::new(&full_path);
     let file_name = path
         .file_name()
