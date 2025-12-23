@@ -38,11 +38,14 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut app = App::new();
-    let client_cert = tokio::fs::read_to_string("./auth/client-cert.pem").await?;
-    let client_key = tokio::fs::read_to_string("./auth/client-key.pem").await?;
+    let client_cert =
+        tokio::fs::read_to_string("/home/munzir/stuff/grpc-files/auth/client-cert.pem").await?;
+    let client_key =
+        tokio::fs::read_to_string("/home/munzir/stuff/grpc-files/auth/client-key.pem").await?;
     let client_identity = Identity::from_pem(client_cert, client_key);
 
-    let server_ca_cert = tokio::fs::read_to_string("./auth/ca-cert.pem").await?;
+    let server_ca_cert =
+        tokio::fs::read_to_string("/home/munzir/stuff/grpc-files/auth/ca-cert.pem").await?;
     let server_ca_cert = Certificate::from_pem(server_ca_cert);
 
     let tls = ClientTlsConfig::new()
@@ -50,8 +53,10 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .ca_certificate(server_ca_cert)
         .identity(client_identity);
 
-    let channel = Channel::from_static("https://localhost:50051")
+    let channel = Channel::from_static("https://192.168.1.149:50051")
         .tls_config(tls)?
+        .initial_connection_window_size(1024 * 1024)
+        .initial_stream_window_size(1024 * 1024)
         .connect()
         .await?;
 
@@ -197,7 +202,7 @@ async fn download_file(
         .await?
         .into_inner();
 
-    let full_path = format!("./downloads/{}", filename);
+    let full_path = format!("/home/munzir/stuff/grpc-files/downloads/{}", filename);
     let path = Path::new(&full_path);
     let file_name = path
         .file_name()
@@ -290,6 +295,7 @@ async fn upload_selected_file(
     client: &mut FileServiceClient<Channel>,
     file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    //let start = std::time::Instant::now();
     let path = Path::new(file_path);
     if !path.exists() {
         return Err("File does not exist".into());
@@ -307,16 +313,18 @@ async fn upload_selected_file(
         .to_string();
     let upload_id = uuid::Uuid::new_v4().to_string();
 
-    let (tx, rx) = tokio::sync::mpsc::channel(32);
+    let (tx, rx) = tokio::sync::mpsc::channel(256);
 
     tokio::spawn(async move {
-        let mut buffer = vec![0u8; 8192];
+        let mut buffer = vec![0u8; 10 * 1024 * 1024];
         let mut chunk_index: u64 = 0;
-
+        //let mut total_read = 0u64;
+        //let read_start = std::time::Instant::now();
         loop {
             match file.read(&mut buffer).await {
                 Ok(0) => break, // EOF
                 Ok(n) => {
+                    //total_read += n as u64;
                     let chunk = UploadChunk {
                         upload_id: upload_id.clone(),
                         filename: filename.to_string(),
@@ -332,12 +340,36 @@ async fn upload_selected_file(
                 Err(_) => break,
             }
         }
+        //let read_elapsed = read_start.elapsed();
+        /*println!(
+            "File reading took: {:?} ({:.2} MB/s)",
+            read_elapsed,
+            (total_read as f64 / 1024.0 / 1024.0) / read_elapsed.as_secs_f64()
+        );*/
     });
 
     // Send stream to server
     let stream = ReceiverStream::new(rx);
+    let network_start = std::time::Instant::now();
     let response = client.upload(tonic::Request::new(stream)).await?;
-    let _result = response.into_inner();
+    let network_elapsed = network_start.elapsed();
+    let result = response.into_inner();
+    //let total_elapsed = start.elapsed();
+    let log_msg = format!(
+        "Network transfer: {:?} ({:.2} MB/s)",
+        network_elapsed,
+        (result.size as f64 / 1024.0 / 1024.0) / network_elapsed.as_secs_f64()
+    );
+    Command::new("sh")
+        .arg("-c")
+        .arg(format!("echo '{}' > log.txt", log_msg))
+        .output()
+        .ok();
+    /*println!(
+        "Total upload: {:?} ({:.2} MB/s)",
+        total_elapsed,
+        (result.size as f64 / 1024.0 / 1024.0) / total_elapsed.as_secs_f64()
+    );*/
 
     Ok(())
 }

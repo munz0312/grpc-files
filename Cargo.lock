@@ -437,6 +437,7 @@ dependencies = [
  "prost",
  "prost-types",
  "ratatui",
+ "rustls",
  "tokio",
  "tokio-stream",
  "tonic",
