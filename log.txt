@@ -1,1 +1,1 @@
-Network transfer: 5.909705616s (20.51 MB/s)
+Network transfer: 86.608503ms (0.29 MB/s)
