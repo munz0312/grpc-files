@@ -2,6 +2,8 @@
 
 A file server implementation using gRPC for client-server communication. Also features a simple TUI for the client using ratatui.
 
+![image of TUI client](2025-12-24-164232_hyprshot.png)
+
 ## Usage
 
 ### Dependencies
