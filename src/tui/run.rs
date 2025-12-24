@@ -42,14 +42,11 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut app = App::new();
-    let client_cert =
-        tokio::fs::read_to_string(auth_dir.join("client-cert.pem")).await?;
-    let client_key =
-        tokio::fs::read_to_string(auth_dir.join("client-key.pem")).await?;
+    let client_cert = tokio::fs::read_to_string(auth_dir.join("client-cert.pem")).await?;
+    let client_key = tokio::fs::read_to_string(auth_dir.join("client-key.pem")).await?;
     let client_identity = Identity::from_pem(client_cert, client_key);
 
-    let server_ca_cert =
-        tokio::fs::read_to_string(auth_dir.join("ca-cert.pem")).await?;
+    let server_ca_cert = tokio::fs::read_to_string(auth_dir.join("ca-cert.pem")).await?;
     let server_ca_cert = Certificate::from_pem(server_ca_cert);
 
     let tls = ClientTlsConfig::new()
@@ -323,7 +320,7 @@ async fn upload_selected_file(
     let (tx, rx) = tokio::sync::mpsc::channel(256);
 
     tokio::spawn(async move {
-        let mut buffer = vec![0u8; 10 * 1024 * 1024];
+        let mut buffer = vec![0u8; 1024 * 1024];
         let mut chunk_index: u64 = 0;
         //let mut total_read = 0u64;
         //let read_start = std::time::Instant::now();
