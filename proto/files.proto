@@ -9,12 +9,16 @@ service FileService {
   rpc Download(DownloadRequest) returns (stream DownloadChunk);
   rpc DeleteFile(DeleteRequest) returns (DeleteResponse);
   rpc ListFiles(ListRequest) returns (ListResponse);
+  rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
+  rpc DeleteDirectory(DeleteDirectoryRequest) returns (DeleteDirectoryResponse);
 }
 
 message FileInfo {
   string filename = 1;
   uint64 size = 2;
   google.protobuf.Timestamp upload_time = 3;
+  bool is_directory = 4;
+  string path = 5;
 }
 
 message UploadChunk {
@@ -22,6 +26,7 @@ message UploadChunk {
   string filename = 2;
   uint64 chunk_index = 3;
   bytes data = 4;
+  string target_directory = 5;
 };
 
 message UploadResponse {
@@ -44,8 +49,23 @@ message DeleteRequest {
 };
 message DeleteResponse {};
 
-message ListRequest {};
+message ListRequest {
+  string path = 1;
+}
 message ListResponse {
   repeated FileInfo files = 1;
-};
+  string current_path = 2;
+}
+
+message CreateDirectoryRequest {
+  string path = 1;
+  string name = 2;
+}
+message CreateDirectoryResponse {}
+
+message DeleteDirectoryRequest {
+  string path = 1;
+  bool recursive = 2;
+}
+message DeleteDirectoryResponse {}
 

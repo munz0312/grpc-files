@@ -24,7 +24,8 @@ use uuid;
 use crate::{
     config::Config,
     fileservice::{
-        DeleteRequest, DownloadRequest, ListRequest, UploadChunk,
+        CreateDirectoryRequest, DeleteDirectoryRequest, DeleteRequest, DownloadRequest,
+        ListRequest, UploadChunk,
         file_service_client::FileServiceClient,
     },
     tui::{
@@ -96,34 +97,107 @@ async fn run_app<B: Backend>(
             match key.code {
                 KeyCode::Char('j') => app.select_next(),
                 KeyCode::Char('k') => app.select_prev(),
+                KeyCode::Char('l') => {
+                    // Enter selected directory
+                    if let Some(dir_path) = app.enter_directory() {
+                        app.set_status(format!("Entering directory: {}", dir_path));
+                        if let Err(e) = refresh_files(app, client).await {
+                            app.set_status(format!("Error: {}", e));
+                        }
+                    } else if app.selected_file().is_some() {
+                        app.set_status("Not a directory. Press 'l' only on directories.".to_string());
+                    }
+                }
+                KeyCode::Char('h') => {
+                    // Go to parent directory
+                    if let Some(parent) = app.parent_directory_path() {
+                        app.set_current_directory(parent.clone());
+                        app.set_status(format!("Going to parent: {}", if parent.is_empty() { "/" } else { &parent }));
+                        if let Err(e) = refresh_files(app, client).await {
+                            app.set_status(format!("Error: {}", e));
+                        }
+                    } else {
+                        app.set_status("Already at root directory".to_string());
+                    }
+                }
                 KeyCode::Char('r') => {
                     app.set_status("Refreshing file list...".to_string());
-                    //terminal.draw(|f| ui(f, app))?;
                     if let Err(e) = refresh_files(app, client).await {
                         app.set_status(format!("Error: {}", e));
                     } else {
                         app.set_status("File list refreshed".to_string());
                     }
                 }
+                KeyCode::Char('n') => {
+                    // Create new directory
+                    app.set_mode(AppMode::CreatingDirectory);
+                    terminal.draw(|f| ui(f, app))?;
+
+                    prepare_terminal_for_input();
+
+                    match prompt_for_directory_name().await {
+                        Some(name) => {
+                            restore_terminal_after_input();
+                            app.set_mode(AppMode::Normal);
+
+                            let current_dir = app.current_directory().to_string();
+                            app.set_status(format!("Creating directory '{}'...", name));
+
+                            if let Err(e) = create_directory(client, &current_dir, &name).await {
+                                app.set_status(format!("Error creating directory: {}", e));
+                            } else {
+                                app.set_status(format!("Created directory '{}'", name));
+                                let _ = refresh_files(app, client).await;
+                            }
+                        }
+                        None => {
+                            restore_terminal_after_input();
+                            app.set_mode(AppMode::Normal);
+                            app.set_status("Directory creation cancelled".to_string());
+                        }
+                    }
+                }
                 KeyCode::Char('X') => {
                     if let Some(file) = app.selected_file() {
-                        let filename = file.filename.clone();
-                        app.set_status(format!("Deleting {}...", filename));
-                        //terminal.draw(|f| ui(f, app))?;
-                        if let Err(e) = delete_file(client, &filename).await {
-                            app.set_status(format!("Error deleting {}: {}", filename, e));
+                        let name = file.filename.clone();
+
+                        if file.is_directory {
+                            if name == ".." {
+                                app.set_status("Cannot delete parent entry".to_string());
+                                continue;
+                            }
+
+                            // For directories, use recursive delete
+                            let path = file.path.clone();
+                            app.set_status(format!("Deleting directory {}...", name));
+
+                            if let Err(e) = delete_directory(client, &path, true).await {
+                                app.set_status(format!("Error deleting directory: {}", e));
+                            } else {
+                                app.set_status(format!("Deleted directory {}", name));
+                                let _ = refresh_files(app, client).await;
+                            }
                         } else {
-                            app.set_status(format!("Deleted {}", filename));
-                            // Refresh after deletion
-                            let _ = refresh_files(app, client).await;
+                            // Existing file delete logic
+                            app.set_status(format!("Deleting {}...", name));
+                            if let Err(e) = delete_file(client, &name).await {
+                                app.set_status(format!("Error: {}", e));
+                            } else {
+                                app.set_status(format!("Deleted {}", name));
+                                let _ = refresh_files(app, client).await;
+                            }
                         }
                     }
                 }
                 KeyCode::Char('d') => {
                     if let Some(file) = app.selected_file() {
+                        if file.is_directory {
+                            app.set_status("Cannot download directories".to_string());
+                            continue;
+                        }
+
                         let filename = file.filename.clone();
                         app.set_status(format!("Downloading {}...", filename));
-                        //terminal.draw(|f| ui(f, app))?;
                         if let Err(e) = download_file(client, &filename, config).await {
                             app.set_status(format!("Error downloading {}: {}", filename, e));
                         } else {
@@ -144,7 +218,9 @@ async fn run_app<B: Backend>(
                             app.set_mode(AppMode::Normal);
                             app.set_file_for_upload(path.clone());
                             app.set_status(format!("Uploading {}...", path));
-                            if let Err(e) = upload_selected_file(client, &path).await {
+
+                            let current_dir = app.current_directory().to_string();
+                            if let Err(e) = upload_selected_file(client, &path, &current_dir).await {
                                 app.set_status(format!("Upload failed: {}", e));
                             } else {
                                 app.set_status("Upload completed".to_string());
@@ -155,7 +231,6 @@ async fn run_app<B: Backend>(
                             app.clear_file_path();
                         }
                         None => {
-                            // Restore terminal even if cancelled
                             restore_terminal_after_file_selection();
                             app.set_mode(AppMode::Normal);
                             app.set_status("File selection cancelled".to_string());
@@ -175,9 +250,9 @@ async fn refresh_files(
     app: &mut App,
     client: &mut FileServiceClient<Channel>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let response = client.list_files(ListRequest {}).await?;
-    let files = response.into_inner().files;
-    app.update_files(files);
+    let response = client.list_files(ListRequest { path: app.current_directory().to_string() }).await?;
+    let inner = response.into_inner();
+    app.update_files(inner.files, inner.current_path);
     app.clear_status();
     Ok(())
 }
@@ -298,8 +373,8 @@ async fn select_file_with_picker() -> Option<String> {
 async fn upload_selected_file(
     client: &mut FileServiceClient<Channel>,
     file_path: &str,
+    target_directory: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    //let start = std::time::Instant::now();
     let path = Path::new(file_path);
     if !path.exists() {
         return Err("File does not exist".into());
@@ -316,24 +391,27 @@ async fn upload_selected_file(
         .ok_or("Filename contains invalid UTF-8")?
         .to_string();
     let upload_id = uuid::Uuid::new_v4().to_string();
+    let target_dir = target_directory.to_string();
 
     let (tx, rx) = tokio::sync::mpsc::channel(256);
 
     tokio::spawn(async move {
         let mut buffer = vec![0u8; 1024 * 1024];
         let mut chunk_index: u64 = 0;
-        //let mut total_read = 0u64;
-        //let read_start = std::time::Instant::now();
         loop {
             match file.read(&mut buffer).await {
                 Ok(0) => break, // EOF
                 Ok(n) => {
-                    //total_read += n as u64;
                     let chunk = UploadChunk {
                         upload_id: upload_id.clone(),
                         filename: filename.to_string(),
                         chunk_index,
                         data: buffer[..n].to_vec(),
+                        target_directory: if chunk_index == 0 {
+                            target_dir.clone()
+                        } else {
+                            String::new()
+                        },
                     };
 
                     if tx.send(chunk).await.is_err() {
@@ -344,12 +422,6 @@ async fn upload_selected_file(
                 Err(_) => break,
             }
         }
-        //let read_elapsed = read_start.elapsed();
-        /*println!(
-            "File reading took: {:?} ({:.2} MB/s)",
-            read_elapsed,
-            (total_read as f64 / 1024.0 / 1024.0) / read_elapsed.as_secs_f64()
-        );*/
     });
 
     // Send stream to server
@@ -376,4 +448,64 @@ async fn upload_selected_file(
     );*/
 
     Ok(())
+}
+
+async fn delete_directory(
+    client: &mut FileServiceClient<Channel>,
+    path: &str,
+    recursive: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    client
+        .delete_directory(DeleteDirectoryRequest {
+            path: path.to_string(),
+            recursive,
+        })
+        .await?;
+    Ok(())
+}
+
+async fn create_directory(
+    client: &mut FileServiceClient<Channel>,
+    parent_path: &str,
+    name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    client
+        .create_directory(CreateDirectoryRequest {
+            path: parent_path.to_string(),
+            name: name.to_string(),
+        })
+        .await?;
+    Ok(())
+}
+
+fn prepare_terminal_for_input() {
+    execute!(io::stdout(), DisableMouseCapture).ok();
+    execute!(io::stdout(), LeaveAlternateScreen).ok();
+    disable_raw_mode().ok();
+    execute!(io::stdout(), Clear(ClearType::All)).ok();
+    println!("Enter directory name:");
+    io::stdout().flush().ok();
+}
+
+fn restore_terminal_after_input() {
+    enable_raw_mode().ok();
+    execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture).ok();
+
+    // Clear any pending input
+    let _ = event::poll(Duration::from_millis(100));
+    while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+        let _ = event::read();
+    }
+}
+
+async fn prompt_for_directory_name() -> Option<String> {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).ok()?;
+    let name = input.trim().to_string();
+
+    if name.is_empty() || name.contains('/') {
+        None
+    } else {
+        Some(name)
+    }
 }

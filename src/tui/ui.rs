@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 
-use crate::{fileservice::FileInfo, tui::app::App};
+use crate::{fileservice::FileInfo, tui::app::{App, AppMode}};
 
 /// helper function to create a centered rect using up certain percentage of the available rect `r`
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -57,6 +57,29 @@ pub fn ui(frame: &mut Frame, app: &App) {
         return;
     }
 
+    // If we're in creating directory mode, show a full-screen message
+    if matches!(app.mode(), AppMode::CreatingDirectory) {
+        let area = centered_rect(60, 20, frame.area());
+        let text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "Creating Directory",
+                Style::default().fg(Color::Cyan).bold(),
+            )),
+            Line::from(""),
+            Line::from("Enter directory name in terminal."),
+            Line::from(""),
+        ];
+        let paragraph = Paragraph::new(text)
+            .block(Block::default().borders(Borders::ALL).title("Create Directory"))
+            .style(Style::default().fg(Color::White))
+            .wrap(Wrap { trim: true })
+            .alignment(Alignment::Center);
+        frame.render_widget(Clear, frame.area()); // Clear the entire frame
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(3)])
@@ -74,7 +97,7 @@ pub fn ui(frame: &mut Frame, app: &App) {
         .iter()
         .enumerate()
         .map(|(i, file_info)| {
-            let (filename, size, upload_time) = format_file_info(file_info);
+            let (filename, size, upload_time, is_dir) = format_file_info(file_info);
 
             // Truncate filename if too long and add ellipsis
             let display_filename = if filename.len() > filename_width {
@@ -92,6 +115,9 @@ pub fn ui(frame: &mut Frame, app: &App) {
             // Fixed width for timestamp (19 chars for YYYY-MM-DD HH:MM:SS)
             let padded_time = format!("{:<19}", upload_time);
 
+            // Different style for directories
+            let base_color = if is_dir { Color::Cyan } else { Color::White };
+
             let line = if i == app.selected_index() {
                 Line::from(vec![
                     Span::styled("→ ", Style::default().fg(Color::Yellow)),
@@ -104,7 +130,7 @@ pub fn ui(frame: &mut Frame, app: &App) {
             } else {
                 Line::from(vec![
                     Span::raw("  "),
-                    Span::styled(padded_filename, Style::default()),
+                    Span::styled(padded_filename, Style::default().fg(base_color)),
                     Span::raw(" "),
                     Span::styled(padded_size, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
@@ -115,12 +141,23 @@ pub fn ui(frame: &mut Frame, app: &App) {
         })
         .collect();
 
+    // Display current path in title
+    let display_path = if app.current_directory().is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{}", app.current_directory())
+    };
+    let title = format!(" File Server Browser - {} ", display_path);
+
+    // Updated help text with new commands
+    let help_text = " r: refresh | l: enter dir | h: parent | n: new dir | d: download | X: delete | U: upload | q: quit ";
+
     let list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" File Server Browser ")
-                .title_bottom(" r: refresh | d: download | X: delete | U: upload | q: quit "),
+                .title(title)
+                .title_bottom(help_text),
         )
         .highlight_style(Style::default());
 
@@ -131,13 +168,14 @@ pub fn ui(frame: &mut Frame, app: &App) {
     } else if app.files().is_empty() {
         "No files. Press r to refresh".to_string()
     } else {
-        format!(
-            "Selected: {}",
-            app.files()
-                .get(app.selected_index())
-                .map(|f| &f.filename)
-                .unwrap_or(&"".to_string())
-        )
+        let selected = app.files().get(app.selected_index());
+        match selected {
+            Some(f) if f.is_directory => {
+                format!("Directory: {} (Press 'l' to enter)", f.filename)
+            }
+            Some(f) => format!("File: {} ({})", f.filename, format_bytes(f.size)),
+            None => "Selected: none".to_string(),
+        }
     };
 
     let status = Paragraph::new(status_text)
@@ -147,11 +185,21 @@ pub fn ui(frame: &mut Frame, app: &App) {
     frame.render_widget(status, chunks[1]);
 }
 
-fn format_file_info(file_info: &FileInfo) -> (String, String, String) {
-    let filename = file_info.filename.clone();
+fn format_file_info(file_info: &FileInfo) -> (String, String, String, bool) {
+    let is_dir = file_info.is_directory;
+    let mut filename = file_info.filename.clone();
 
-    // Format file size
-    let size = format_bytes(file_info.size);
+    // Add "/" suffix for directories (except "..")
+    if is_dir && filename != ".." {
+        filename.push('/');
+    }
+
+    // For directories, show "<DIR>" instead of size
+    let size = if is_dir {
+        "<DIR>".to_string()
+    } else {
+        format_bytes(file_info.size)
+    };
 
     // Format upload time
     let upload_time = if let Some(timestamp) = &file_info.upload_time {
@@ -168,7 +216,7 @@ fn format_file_info(file_info: &FileInfo) -> (String, String, String) {
         "Unknown".to_string()
     };
 
-    (filename, size, upload_time)
+    (filename, size, upload_time, is_dir)
 }
 
 fn format_bytes(bytes: u64) -> String {
