@@ -100,6 +100,7 @@ async fn run_app<B: Backend>(
                 KeyCode::Char('l') => {
                     // Enter selected directory
                     if let Some(dir_path) = app.enter_directory() {
+                        app.set_current_directory(dir_path.clone());
                         app.set_status(format!("Entering directory: {}", dir_path));
                         if let Err(e) = refresh_files(app, client).await {
                             app.set_status(format!("Error: {}", e));
