@@ -141,10 +141,10 @@ impl FileService for GRPCFileStore {
         &self,
         request: tonic::Request<DeleteRequest>,
     ) -> Result<tonic::Response<DeleteResponse>, tonic::Status> {
-        let filename = request.into_inner().file_name;
-        let full_path = self.storage_path.clone() + "/" + filename.as_str();
+        let req = request.into_inner();
+        let full_path = self.resolve_path(&req.file_name)?;
         println!("{}", full_path);
-        tokio::fs::remove_file(full_path)
+        tokio::fs::remove_file(&full_path)
             .await
             .map_err(|e| tonic::Status::not_found(e.to_string()))?;
         Ok(tonic::Response::new(DeleteResponse {}))

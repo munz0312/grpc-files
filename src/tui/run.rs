@@ -162,14 +162,15 @@ async fn run_app<B: Backend>(
                     if let Some(file) = app.selected_file() {
                         let name = file.filename.clone();
 
-                        if file.is_directory {
-                            if name == ".." {
-                                app.set_status("Cannot delete parent entry".to_string());
-                                continue;
-                            }
+                        if name == ".." {
+                            app.set_status("Cannot delete parent entry".to_string());
+                            continue;
+                        }
 
+                        let path = file.path.clone();
+
+                        if file.is_directory {
                             // For directories, use recursive delete
-                            let path = file.path.clone();
                             app.set_status(format!("Deleting directory {}...", name));
 
                             if let Err(e) = delete_directory(client, &path, true).await {
@@ -181,7 +182,7 @@ async fn run_app<B: Backend>(
                         } else {
                             // Existing file delete logic
                             app.set_status(format!("Deleting {}...", name));
-                            if let Err(e) = delete_file(client, &name).await {
+                            if let Err(e) = delete_file(client, &path).await {
                                 app.set_status(format!("Error: {}", e));
                             } else {
                                 app.set_status(format!("Deleted {}", name));
